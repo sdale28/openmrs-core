@@ -1,15 +1,11 @@
 /**
- * The contents of this file are subject to the OpenMRS Public License
- * Version 1.0 (the "License"); you may not use this file except in
- * compliance with the License. You may obtain a copy of the License at
- * http://license.openmrs.org
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
  *
- * Software distributed under the License is distributed on an "AS IS"
- * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
- * License for the specific language governing rights and limitations
- * under the License.
- *
- * Copyright (C) OpenMRS, LLC.  All Rights Reserved.
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
  */
 package org.openmrs.util.databasechange;
 
@@ -38,6 +34,7 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
+import org.apache.commons.lang3.ArrayUtils;
 import org.dbunit.DatabaseUnitException;
 import org.dbunit.database.DatabaseConfig;
 import org.dbunit.database.DatabaseConnection;
@@ -51,8 +48,8 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.cfg.Environment;
 
 /**
- * Allows to test database upgrade. It accepts initialDatabasePath which should point to the h2 liqubaseConnection that will
- * be used for upgrade.
+ * Allows to test database upgrade. It accepts initialDatabasePath which should point to the h2
+ * liqubaseConnection that will be used for upgrade.
  */
 public class DatabaseUpgradeTestUtil {
 	
@@ -179,9 +176,15 @@ public class DatabaseUpgradeTestUtil {
 		}
 	}
 	
-	public List<Map<String, String>> select(String tableName, String... columnNames) throws SQLException {
-		PreparedStatement query = connection.prepareStatement("select " + StringUtils.join(columnNames, ", ") + " from "
-		        + tableName);
+	public List<Map<String, String>> select(String tableName, String where, String columnName, String... columnNames)
+	        throws SQLException {
+		String[] allColumnNames = ArrayUtils.addAll(new String[] { columnName }, columnNames);
+		
+		String sql = "select " + StringUtils.join(allColumnNames, ", ") + " from " + tableName;
+		if (!StringUtils.isBlank(where)) {
+			sql += " where " + where;
+		}
+		PreparedStatement query = connection.prepareStatement(sql);
 		ResultSet resultSet = query.executeQuery();
 		
 		List<Map<String, String>> results = new ArrayList<Map<String, String>>();
@@ -189,9 +192,9 @@ public class DatabaseUpgradeTestUtil {
 			Map<String, String> columns = new HashMap<String, String>();
 			results.add(columns);
 			
-			for (int i = 0; i < columnNames.length; i++) {
+			for (int i = 0; i < allColumnNames.length; i++) {
 				Object object = resultSet.getObject(i + 1);
-				columns.put(columnNames[i], object.toString());
+				columns.put(allColumnNames[i], object != null ? object.toString() : null);
 			}
 		}
 		

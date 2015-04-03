@@ -1,15 +1,11 @@
 /**
- * The contents of this file are subject to the OpenMRS Public License
- * Version 1.0 (the "License"); you may not use this file except in
- * compliance with the License. You may obtain a copy of the License at
- * http://license.openmrs.org
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
  *
- * Software distributed under the License is distributed on an "AS IS"
- * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
- * License for the specific language governing rights and limitations
- * under the License.
- *
- * Copyright (C) OpenMRS, LLC. All Rights Reserved.
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
  */
 package org.openmrs.web.controller.form;
 
@@ -40,24 +36,25 @@ public class FormFormControllerTest extends BaseWebContextSensitiveTest {
 	
 	private FormService formService;
 	
+	private FormFormController controller;
+	
 	@Before
-	public void setup() {
+	public void setup() throws Exception {
 		if (formService == null) {
 			formService = Context.getFormService();
 		}
-	}
-	
-	@Test
-	public void shouldNotSaveAFormWhenFormsAreLocked() throws Exception {
 		// dataset to locks forms
 		executeDataSet("org/openmrs/web/controller/include/FormFormControllerTest.xml");
 		
 		//setting the controller
-		FormFormController controller = (FormFormController) applicationContext.getBean("formEditForm");
+		controller = (FormFormController) applicationContext.getBean("formEditForm");
 		controller.setApplicationContext(applicationContext);
 		controller.setFormView("index.htm");
 		controller.setSuccessView("formEdit.form");
-		
+	}
+	
+	@Test
+	public void shouldNotSaveAFormWhenFormsAreLocked() throws Exception {
 		MockHttpServletRequest request = new MockHttpServletRequest("POST", "/admin/forms/formEdit.form?formId=1");
 		request.setSession(new MockHttpSession(null));
 		HttpServletResponse response = new MockHttpServletResponse();
@@ -70,6 +67,26 @@ public class FormFormControllerTest extends BaseWebContextSensitiveTest {
 		
 		ModelAndView mav = controller.handleRequest(request, response);
 		Assert.assertEquals("The save attempt should have failed!", "index.htm", mav.getViewName());
+		Assert.assertNotEquals("formEdit.form", mav.getViewName());
+		Assert.assertSame(controller.getFormView(), mav.getViewName());
+		Assert.assertNotNull(formService.getForm(1));
+	}
+	
+	@Test
+	public void shouldNotDuplicateAFormWhenFormsAreLocked() throws Exception {
+		MockHttpServletRequest request = new MockHttpServletRequest("POST",
+		        "/admin/forms/formEdit.form?duplicate=true&formId=1");
+		request.setSession(new MockHttpSession(null));
+		HttpServletResponse response = new MockHttpServletResponse();
+		controller.handleRequest(request, response);
+		
+		request.addParameter("name", "TRUNK");
+		request.addParameter("version", "1");
+		request.addParameter("action", "Form.Duplicate");
+		request.setContentType("application/x-www-form-urlencoded");
+		
+		ModelAndView mav = controller.handleRequest(request, response);
+		Assert.assertEquals("The duplicate attempt should have failed!", "index.htm", mav.getViewName());
 		Assert.assertNotEquals("formEdit.form", mav.getViewName());
 		Assert.assertSame(controller.getFormView(), mav.getViewName());
 		Assert.assertNotNull(formService.getForm(1));

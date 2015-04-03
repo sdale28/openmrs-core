@@ -1,15 +1,11 @@
 /**
- * The contents of this file are subject to the OpenMRS Public License
- * Version 1.0 (the "License"); you may not use this file except in
- * compliance with the License. You may obtain a copy of the License at
- * http://license.openmrs.org
+ * This Source Code Form is subject to the terms of the Mozilla Public License,
+ * v. 2.0. If a copy of the MPL was not distributed with this file, You can
+ * obtain one at http://mozilla.org/MPL/2.0/. OpenMRS is also distributed under
+ * the terms of the Healthcare Disclaimer located at http://openmrs.org/license.
  *
- * Software distributed under the License is distributed on an "AS IS"
- * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See the
- * License for the specific language governing rights and limitations
- * under the License.
- *
- * Copyright (C) OpenMRS, LLC.  All Rights Reserved.
+ * Copyright (C) OpenMRS Inc. OpenMRS is a registered trademark and the OpenMRS
+ * graphic logo is a trademark of OpenMRS Inc.
  */
 package org.openmrs.web.filter.update;
 
@@ -74,14 +70,14 @@ public class UpdateFilter extends StartupFilter {
 	/**
 	 * The velocity macro page to redirect to if an error occurs or on initial startup
 	 */
-	private final String DEFAULT_PAGE = "maintenance.vm";
+	private static final String DEFAULT_PAGE = "maintenance.vm";
 	
 	/**
 	 * The page that lists off all the currently unexecuted changes
 	 */
-	private final String REVIEW_CHANGES = "reviewchanges.vm";
+	private static final String REVIEW_CHANGES = "reviewchanges.vm";
 	
-	private final String PROGRESS_VM_AJAXREQUEST = "updateProgress.vm.ajaxRequest";
+	private static final String PROGRESS_VM_AJAXREQUEST = "updateProgress.vm.ajaxRequest";
 	
 	/**
 	 * The model object behind this set of screens
@@ -144,7 +140,7 @@ public class UpdateFilter extends StartupFilter {
 	 *      javax.servlet.http.HttpServletResponse)
 	 */
 	@Override
-	protected void doPost(HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws IOException,
+	protected synchronized void doPost(HttpServletRequest httpRequest, HttpServletResponse httpResponse) throws IOException,
 	        ServletException {
 		
 		String page = httpRequest.getParameter("page");
@@ -334,11 +330,12 @@ public class UpdateFilter extends StartupFilter {
 	 */
 	protected boolean authenticateAsSuperUser(String usernameOrSystemId, String password) throws ServletException {
 		Connection connection = null;
+		PreparedStatement statement = null;
 		try {
 			connection = DatabaseUpdater.getConnection();
 			
 			String select = "select user_id, password, salt from users where (username = ? or system_id = ?) and retired = '0'";
-			PreparedStatement statement = connection.prepareStatement(select);
+			statement = connection.prepareStatement(select);
 			statement.setString(1, usernameOrSystemId);
 			statement.setString(2, usernameOrSystemId);
 			
@@ -350,9 +347,13 @@ public class UpdateFilter extends StartupFilter {
 					String storedPassword = results.getString(2);
 					String salt = results.getString(3);
 					String passwordToHash = password + salt;
-					return Security.hashMatches(storedPassword, passwordToHash) && isSuperUser(connection, userId);
+					boolean result = Security.hashMatches(storedPassword, passwordToHash) && isSuperUser(connection, userId);
+					statement.close();
+					return result;
 				}
 			}
+			// Close statement
+			statement.close();
 		}
 		catch (Exception e) {
 			log
@@ -364,7 +365,7 @@ public class UpdateFilter extends StartupFilter {
 			// again the old way
 			try {
 				String select = "select user_id, password, salt from users where (username = ? or system_id = ?) and voided = '0'";
-				PreparedStatement statement = connection.prepareStatement(select);
+				statement = connection.prepareStatement(select);
 				statement.setString(1, usernameOrSystemId);
 				statement.setString(2, usernameOrSystemId);
 				
@@ -380,11 +381,19 @@ public class UpdateFilter extends StartupFilter {
 					}
 				}
 			}
-			catch (Throwable t2) {
+			catch (Exception t2) {
 				log.error("Error while trying to authenticate as super user (voided version)", e);
 			}
 		}
 		finally {
+			try {
+				if (statement != null && !statement.isClosed()) {
+					statement.close();
+				}
+			}
+			catch (SQLException e) {
+				log.warn("Error while closing statement");
+			}
 			if (connection != null) {
 				try {
 					connection.close();
